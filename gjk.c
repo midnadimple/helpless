@@ -1,4 +1,4 @@
-//  Created by Igor Kroitor on 29/12/15.
+//  Created by Igor Kroitor on 29/12/15, Modifiied by Abdulmujeeb Raji on 29/08/2024
 
 //-----------------------------------------------------------------------------
 // Gilbert-Johnson-Keerthi (GJK) collision detection algorithm in 2D

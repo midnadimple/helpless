@@ -9,6 +9,8 @@ typedef enum Sprite_ID {
 	SPRITE_mutant,
 	SPRITE_tree,
 	SPRITE_startersword,
+	SPRITE_starterbow,
+    SPRITE_arrow,
 	SPRITE_MAX, 
 } Sprite_ID;
 Sprite sprites[SPRITE_MAX];

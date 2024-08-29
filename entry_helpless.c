@@ -7,6 +7,7 @@ void player_setup(Entity* en) {
 	en->arch = ARCH_player;
 	en->sprite_id = SPRITE_player;
 	en->renderable = true;
+	en->is_animate = true;
 	en->health = 100;
 }
 
@@ -14,6 +15,7 @@ void spider_setup(Entity* en) {
 	en->arch = ARCH_spider;
 	en->sprite_id = SPRITE_spider;
 	en->renderable = true;
+	en->is_animate = true;
 	en->health = 30;
 	en->pos = v2(get_random_float32_in_range(-200, 200), get_random_float32_in_range(-200, 200));
 	en->hitbox[0] = v2(0, 0);
@@ -22,15 +24,50 @@ void spider_setup(Entity* en) {
 	en->hitbox[3] = v2(20, 7);
 }
 
-void startersword_setup(Entity* en) {
-	en->arch = ARCH_weapon;
-	en->sprite_id = SPRITE_startersword;
+void weapon_setup(Entity* en, Entity_Archetype weapon_type) {
+	en->arch = weapon_type;
 	en->renderable = true;
-	en->damage = 10;
+	en->is_weapon = true;
+	switch (weapon_type) {
+		case ARCH_startersword: {
+			en->sprite_id = SPRITE_startersword;
+			en->weapon_class = WEAPON_melee;
+			en->damage = 10;
+			en->hitbox[0] = v2(0, 0);
+			en->hitbox[1] = v2(0, 13);
+			en->hitbox[2] = v2(13, 0);
+			en->hitbox[3] = v2(13, 13);
+			en->weapon_speed = 3;
+		} break;
+
+		case ARCH_starterbow: {
+			en->sprite_id = SPRITE_starterbow;
+			en->weapon_class = WEAPON_ranged;
+			en->damage = 5;
+			en->weapon_speed = 3;
+		} break;
+
+		default: {
+			assert(false, "Invalid weapon type");
+		} break;
+	}
+}
+
+void arrow_setup(Entity* en, Vector2 start_pos, Vector2 fire_dir, float32 base_dmg) {
+	en->arch = ARCH_arrow;
+	en->sprite_id = SPRITE_arrow;
+	en->renderable = true;
+	en->is_projectile = true;
+	en->projectile_range = 200;
+	en->projectile_fire_dir = fire_dir;
+	en->projectile_start_pos = start_pos;
+	en->projectile_speed = 5;
+	en->pos = start_pos;
+	en->damage = base_dmg + 5;
 	en->hitbox[0] = v2(0, 0);
-	en->hitbox[1] = v2(0, 13);
-	en->hitbox[2] = v2(13, 0);
-	en->hitbox[3] = v2(13, 13);
+	en->hitbox[1] = v2(10, 0);
+	en->hitbox[2] = v2(0, 3);
+	en->hitbox[3] = v2(10, 3);
 }
 
 int entry(int argc, char **argv) {
@@ -53,12 +90,16 @@ int entry(int argc, char **argv) {
 	sprite_load(STR("assets/player.png"), SPRITE_player);
 	sprite_load(STR("assets/spider.png"), SPRITE_spider);
 	sprite_load(STR("assets/startersword.png"), SPRITE_startersword);
+	sprite_load(STR("assets/starterbow.png"), SPRITE_starterbow);
+	sprite_load(STR("assets/arrow.png"), SPRITE_arrow);
 
 	Entity* player = entity_create();
 	player_setup(player);
+	player->primary_weapon = ARCH_startersword;
+	player->secondary_weapon = ARCH_starterbow;
 
-	Entity* startersword = entity_create();
-	startersword_setup(startersword);
+	Entity* player_weapon = entity_create();
+	weapon_setup(player_weapon, player->primary_weapon);
 
 	for (int i = 0; i < 10; i++) {
 		Entity* spider = entity_create();
@@ -110,91 +151,104 @@ int entry(int argc, char **argv) {
 		move_axis = v2_normalize(move_axis);
 
 		player->pos = v2_add(player->pos, v2_mulf(move_axis, 75 * delta_time));
-		startersword->weapon_owner_pos = player->pos;
+		player_weapon->weapon_owner_pos = player->pos;
 		if (move_axis.x != 0 || move_axis.y != 0) {
-			startersword->weapon_dir = move_axis;
+			player_weapon->weapon_dir = move_axis;
+		}
+
+		// weapon swapping
+		if (is_key_just_pressed('X')) {
+			swap(player->primary_weapon, player->secondary_weapon, Entity_Archetype);
+			entity_destroy(player_weapon);
+			player_weapon = entity_create();
+			weapon_setup(player_weapon, player->primary_weapon);
+			player_weapon->pos = player->pos;
 		}
 
 		// :generic simulation (i.e. not a specific boss or player)
-		for (int i = 0; i < MAX_ENTITIES; i++) {
-			Entity* en = &world->entities[i];
-			if (en->alive) {
-				switch (en->arch) {
-					case ARCH_weapon: {
-						if (is_key_just_pressed('Z')) {
-							for (int i = 0; i < MAX_ENTITIES; i++) {
-								Entity* other_en = &world->entities[i];
+		for (Entity* en = 0; entity_increment(&en);) {
+			if (en->is_animate && en->health <= 0) {
+				en->alive = false;
+			}
 
-								Vector2 hitbox[4] = {
-									v2_add(en->hitbox[0], en->pos),
-									v2_add(en->hitbox[1], en->pos),
-									v2_add(en->hitbox[2], en->pos),
-									v2_add(en->hitbox[3], en->pos),
-								};
+			if (en->is_weapon) {
+				en->weapon_cooldown_secs -= 1.0 * delta_time; // decreases by 1 every second
+				if (is_key_just_pressed('Z') && en->weapon_cooldown_secs <= 0) {
+					en->weapon_cooldown_secs = 1 / (en->weapon_speed);
+					switch (en->weapon_class) {
+						case WEAPON_melee: {
+							Vector2* hitbox = entity_resolve_hitbox(en);
+							for (Entity* other_en = 0; entity_increment(&other_en);) {
+								Vector2* other_hitbox = entity_resolve_hitbox(other_en);
 
-								Vector2 other_hitbox[4] = {
-									v2_add(other_en->hitbox[0], other_en->pos),
-									v2_add(other_en->hitbox[1], other_en->pos),
-									v2_add(other_en->hitbox[2], other_en->pos),
-									v2_add(other_en->hitbox[3], other_en->pos),
-								};
-
-								if (other_en->alive && gjk(hitbox, 4, other_hitbox, 4)) {
+								if (gjk(hitbox, 4, other_hitbox, 4)) {
 									other_en->health -= en->damage;
 								}
 							}
-						}
-					} break;
+						} break;
 
-					default: {
-						if (en->health <= 0) {
-							en->alive = false;
+						case WEAPON_ranged: {
+							// TODO add other ammo, also add an actual limit once inventory is done
+							Entity* arrow = entity_create();
+							arrow_setup(arrow, en->pos, en->weapon_dir, en->damage);
+						} break;
+
+						default: break;
+					}
+				}
+			}
+
+			if (en->is_projectile) {
+				if (en->pos.x < en->projectile_start_pos.x + en->projectile_range &&
+					en->pos.y < en->projectile_start_pos.y + en->projectile_range) {
+					Vector2* hitbox = entity_resolve_hitbox(en);
+					for (Entity* other_en = 0; entity_increment(&other_en);) {
+						Vector2* other_hitbox = entity_resolve_hitbox(other_en);
+
+						if (other_en->is_animate && gjk(hitbox, 4, other_hitbox, 4)) {
+							other_en->health -= en->damage;
+							entity_destroy(en);
 						}
-					} break;
+					}
+
+					en->pos = v2_add(en->pos, v2_mulf(en->projectile_fire_dir, en->projectile_speed * 50.0 * delta_time));
+				} else {
+					entity_destroy(en);
 				}
 			}
 		}
 
 		// :rendering
 		// TODO add a layer system, so that you place render instructions anywhere
-		for (int i = 0; i < MAX_ENTITIES; i++) {
-			Entity* en = &world->entities[i];
+		for (Entity* en = 0; entity_increment(&en);) {
 			if (en->alive && en->renderable) {
-				switch (en->arch) {
-					case ARCH_weapon: {
-						Sprite* sprite = sprite_get(en->sprite_id);
+				Sprite* sprite = sprite_get(en->sprite_id);
+				Matrix4 xform = m4_scalar(1.0);
 
-						// move the weapon away from its owner
-						Vector2 dist_from_owner = v2_mulf(sprite->size, 1.25f);
-						dist_from_owner.x = max(20, dist_from_owner.x);
-						dist_from_owner.y = max(20, dist_from_owner.y);
+				if (en->is_projectile) {
+					// face where the projectile is going
+					xform = m4_translate(xform, v3(en->pos.x, en->pos.y, 0));
+					xform = m4_rotate_z(xform, atan2(en->projectile_fire_dir.x, en->projectile_fire_dir.y) - 90 * RAD_PER_DEG);
+				} else if (en->is_weapon) {
+					// move the weapon away from its owner
+					Vector2 dist_from_owner = v2_mulf(sprite->size, 1.25f);
+					dist_from_owner.x = max(20, dist_from_owner.x);
+					dist_from_owner.y = max(20, dist_from_owner.y);
 
-						Vector2 target_pos = v2_add(en->weapon_owner_pos, v2_mul(en->weapon_dir, dist_from_owner));
-						animate_to_target_v2(&(en->pos), target_pos, delta_time, 30.0f);
+					Vector2 target_pos = v2_add(en->weapon_owner_pos, v2_mul(en->weapon_dir, dist_from_owner));
+					animate_to_target_v2(&(en->pos), target_pos, delta_time, 30.0f);
 
-						float32 target_rads = atan2(en->weapon_dir.x, en->weapon_dir.y) - 45 * RAD_PER_DEG;
-						animate_to_target_f32(&(en->weapon_rads), target_rads, delta_time, 15.0f);
+					float32 target_rads = atan2(en->weapon_dir.x, en->weapon_dir.y) - 45 * RAD_PER_DEG;
+					animate_to_target_f32(&(en->weapon_rads), target_rads, delta_time, 15.0f);
 
-						Matrix4 xform = m4_scalar(1.0);
-						xform = m4_translate(xform, v3(en->pos.x, en->pos.y, 0));
-						xform = m4_rotate_z(xform, en->weapon_rads);
-
-						xform = m4_translate(xform, v3(sprite->size.x * -0.5, sprite->size.y * -0.5, 0));
-						draw_image_xform(sprite->image, xform, sprite->size, COLOR_WHITE);
-
-					} break;
-
-					default: {
-						Sprite* sprite = sprite_get(en->sprite_id);
-
-						Matrix4 xform = m4_scalar(1.0);
-						xform = m4_translate(xform, v3(en->pos.x, en->pos.y, 0));
-
-						xform = m4_translate(xform, v3(sprite->size.x * -0.5, sprite->size.y * -0.5, 0));
-						draw_image_xform(sprite->image, xform, sprite->size, COLOR_WHITE);
-
-					} break;
+					xform = m4_translate(xform, v3(en->pos.x, en->pos.y, 0));
+					xform = m4_rotate_z(xform, en->weapon_rads);
+				} else {					
+					xform = m4_translate(xform, v3(en->pos.x, en->pos.y, 0));
 				}
+
+				xform = m4_translate(xform, v3(sprite->size.x * -0.5, sprite->size.y * -0.5, 0));
+				draw_image_xform(sprite->image, xform, sprite->size, COLOR_WHITE);
 			}
 		}
 		
