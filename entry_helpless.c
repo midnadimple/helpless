@@ -1,11 +1,10 @@
 #include "util.c"
-#include "sprite.c"
 #include "entity.c"
+#include "sprite.c"
 #include "gjk.c"
 
 void player_setup(Entity* en) {
 	en->arch = ARCH_player;
-	en->sprite_id = SPRITE_player;
 	en->renderable = true;
 	en->is_animate = true;
 	en->health = 100;
@@ -13,7 +12,6 @@ void player_setup(Entity* en) {
 
 void spider_setup(Entity* en) {
 	en->arch = ARCH_spider;
-	en->sprite_id = SPRITE_spider;
 	en->renderable = true;
 	en->is_animate = true;
 	en->health = 30;
@@ -30,7 +28,6 @@ void weapon_setup(Entity* en, Entity_Archetype weapon_type) {
 	en->is_weapon = true;
 	switch (weapon_type) {
 		case ARCH_startersword: {
-			en->sprite_id = SPRITE_startersword;
 			en->weapon_class = WEAPON_melee;
 			en->damage = 10;
 			en->hitbox[0] = v2(0, 0);
@@ -41,7 +38,6 @@ void weapon_setup(Entity* en, Entity_Archetype weapon_type) {
 		} break;
 
 		case ARCH_starterbow: {
-			en->sprite_id = SPRITE_starterbow;
 			en->weapon_class = WEAPON_ranged;
 			en->damage = 5;
 			en->weapon_speed = 3;
@@ -55,9 +51,9 @@ void weapon_setup(Entity* en, Entity_Archetype weapon_type) {
 
 void arrow_setup(Entity* en, Vector2 start_pos, Vector2 fire_dir, float32 base_dmg) {
 	en->arch = ARCH_arrow;
-	en->sprite_id = SPRITE_arrow;
 	en->renderable = true;
 	en->is_projectile = true;
+	en->is_animate = false; // idk why this was on in the first place?
 	en->projectile_range = 200;
 	en->projectile_fire_dir = fire_dir;
 	en->projectile_start_pos = start_pos;
@@ -170,11 +166,22 @@ int entry(int argc, char **argv) {
 			if (en->is_animate && en->health <= 0) {
 				en->alive = false;
 			}
+			
+			// TODO Finish dis
+			// if (en->is_item && is_key_just_pressed('C')) {
+			// 	Vector2* player_hitbox = entity_resolve_hitbox(player);
+			// 	Vector2* item_hitbox = entity_resolve_hitbox(en);
+
+			// 	if (gjk(player_hitbox, 4, item_hitbox, 4)) {
+			// 		entity_destroy(en);
+			// 	}
+			// }
 
 			if (en->is_weapon) {
 				en->weapon_cooldown_secs -= 1.0 * delta_time; // decreases by 1 every second
 				if (is_key_just_pressed('Z') && en->weapon_cooldown_secs <= 0) {
 					en->weapon_cooldown_secs = 1 / (en->weapon_speed);
+
 					switch (en->weapon_class) {
 						case WEAPON_melee: {
 							Vector2* hitbox = entity_resolve_hitbox(en);
@@ -199,6 +206,7 @@ int entry(int argc, char **argv) {
 			}
 
 			if (en->is_projectile) {
+				en->pos = v2_add(en->pos, v2_mulf(en->projectile_fire_dir, en->projectile_speed * 50.0 * delta_time));
 				if (en->pos.x < en->projectile_start_pos.x + en->projectile_range &&
 					en->pos.y < en->projectile_start_pos.y + en->projectile_range) {
 					Vector2* hitbox = entity_resolve_hitbox(en);
@@ -211,18 +219,16 @@ int entry(int argc, char **argv) {
 						}
 					}
 
-					en->pos = v2_add(en->pos, v2_mulf(en->projectile_fire_dir, en->projectile_speed * 50.0 * delta_time));
 				} else {
 					entity_destroy(en);
 				}
 			}
 		}
 
-		// :rendering
-		// TODO add a layer system, so that you place render instructions anywhere
+		// :entity rendering
 		for (Entity* en = 0; entity_increment(&en);) {
 			if (en->alive && en->renderable) {
-				Sprite* sprite = sprite_get(en->sprite_id);
+				Sprite* sprite = sprite_get(sprite_get_id_from_arch(en->arch));
 				Matrix4 xform = m4_scalar(1.0);
 
 				if (en->is_projectile) {
@@ -250,6 +256,13 @@ int entry(int argc, char **argv) {
 				xform = m4_translate(xform, v3(sprite->size.x * -0.5, sprite->size.y * -0.5, 0));
 				draw_image_xform(sprite->image, xform, sprite->size, COLOR_WHITE);
 			}
+		}
+
+		// :ui rendering
+		{
+			// TODO Set projection
+			// TODO Weapon Slots
+			// TODO Health Bar
 		}
 		
 		os_update(); 

@@ -4,6 +4,7 @@ typedef struct Sprite {
 } Sprite;
 
 typedef enum Sprite_ID {
+    SPRITE_nil,
 	SPRITE_player,
 	SPRITE_spider,
 	SPRITE_mutant,
@@ -27,4 +28,17 @@ Sprite* sprite_get(Sprite_ID id) {
 		return &sprites[id];
 	}
 	return &sprites[0];
+}
+
+Sprite_ID sprite_get_id_from_arch(Entity_Archetype arch) {
+	switch (arch) {
+		case ARCH_player: return SPRITE_player; break;
+        case ARCH_spider: return SPRITE_spider ; break;
+        case ARCH_mutant: return SPRITE_mutant ; break;
+        case ARCH_tree: return SPRITE_tree ; break;
+        case ARCH_startersword: return SPRITE_startersword ; break;
+        case ARCH_starterbow: return SPRITE_starterbow ; break;
+        case ARCH_arrow: return SPRITE_arrow ; break;
+        default: return 0;
+	}
 }

@@ -21,7 +21,6 @@ typedef struct Entity {
 	bool renderable;
 	Entity_Archetype arch;
 	Vector2 pos;
-	Sprite_ID sprite_id;
     bool is_animate;
 	float32 health, damage;
     Vector2 hitbox[4];
