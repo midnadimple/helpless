@@ -28,6 +28,7 @@ typedef struct Entity {
     Vector2 hitbox[4];
     Entity_Archetype primary_weapon;
     Entity_Archetype secondary_weapon;
+    Armour armour;
     bool is_weapon;
     Weapon_Class weapon_class;
 	Vector2 weapon_owner_pos;
@@ -113,6 +114,7 @@ Vector2* entity_resolve_hitbox(Entity* en) {
 }
 
 void entity_take_damage(Entity* en, float damage) {
+    damage *= armour_damage_multiplier(en->armour);
     en->health = clamp(en->health - damage, 0, en->max_health);
     // todo add knockback
 }

@@ -11,6 +11,7 @@ typedef enum Sprite_ID {
 	SPRITE_tree,
 	SPRITE_startersword,
 	SPRITE_starterbow,
+    SPRITE_starterarmour,
     SPRITE_arrow,
 	SPRITE_MAX, 
 } Sprite_ID;

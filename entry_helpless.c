@@ -1,5 +1,6 @@
 #include "util.c"
 #include "sprite.c"
+#include "armour.c"
 #include "entity.c"
 #include "gjk.c"
 #include "weapon.c"
@@ -43,6 +44,7 @@ int entry(int argc, char **argv) {
 	sprite_load(STR("assets/spider.png"), SPRITE_spider);
 	sprite_load(STR("assets/startersword.png"), SPRITE_startersword);
 	sprite_load(STR("assets/starterbow.png"), SPRITE_starterbow);
+	sprite_load(STR("assets/starterarmour.png"), SPRITE_starterarmour);
 	sprite_load(STR("assets/arrow.png"), SPRITE_arrow);
 
 	Gfx_Font* font = load_font_from_disk(STR("assets/m3x6.ttf"), get_heap_allocator());
@@ -222,6 +224,10 @@ int entry(int argc, char **argv) {
 
 				xform = m4_translate(xform, v3(sprite->size.x * -0.5, sprite->size.y * -0.5, 0));
 				draw_image_xform(sprite->image, xform, sprite->size, COLOR_WHITE);
+				if (en->armour != ARMOUR_none) {
+					Sprite* armour_sprite = sprite_get(armour_sprite_id(en->armour));
+					draw_image_xform(armour_sprite->image, xform, armour_sprite->size, COLOR_WHITE);
+				}
 			}
 		}
 

@@ -4,6 +4,7 @@ void player_setup(Entity* en) {
 	en->is_animate = true;
 	en->max_health = 100;
 	en->health = en->max_health;
+    en->armour = ARMOUR_starter;
 }
 
 void player_process_input(Entity* player, Entity* player_weapon, float delta_time) {
