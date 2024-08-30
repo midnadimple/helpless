@@ -119,8 +119,6 @@ int entry(int argc, char **argv) {
 				}
 			}
 
-			// TODO Add Armour (one piece set)
-
 			// TODO Animate all this stuff
 			
 			// TODO Finish item pickup system
