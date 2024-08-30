@@ -24,8 +24,7 @@ void player_process_input(Entity* player, Entity* player_weapon, float delta_tim
 
     player->pos = v2_add(player->pos, v2_mulf(move_axis, 75 * delta_time));
     player_weapon->weapon_owner_pos = player->pos;
-    Vector2 mouse_dir = v2_normalize(mouse_world_pos());
-    player_weapon->weapon_dir = v2(mouse_dir.x, mouse_dir.y);
+    player_weapon->weapon_dir = v2_normalize(get_mouse_pos_in_ndc());
 
     // weapon swapping
     if (is_key_just_pressed(MOUSE_BUTTON_RIGHT)) {

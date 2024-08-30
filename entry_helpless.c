@@ -116,8 +116,12 @@ int entry(int argc, char **argv) {
 					}
 				}
 			}
+
+			// TODO Add Armour (one piece set)
+
+			// TODO Animate all this stuff
 			
-			// TODO Finish dis
+			// TODO Finish item pickup system
 			// if (en->is_item && is_key_just_pressed('E')) {
 			// 	Vector2* player_hitbox = entity_resolve_hitbox(player);
 			// 	Vector2* item_hitbox = entity_resolve_hitbox(en);
@@ -126,6 +130,14 @@ int entry(int argc, char **argv) {
 			// 		entity_destroy(en);
 			// 	}
 			// }
+
+			// TODO Add inventory system using item_inv_size
+
+			// TODO Add NPCs you can talk to (dialogue system)
+			// TODO Add NPCs who sell you stuff (shop system)
+			// TODO Add choices on what to do with stuff (decision tree system)
+
+			// ONCE ALL TODOs are done, MVP prototype is done, and then you just spam content (enemy AI, bosses, world gen, items, decisions, NPCs)
 
 			if (en->is_weapon) {
 				en->weapon_cooldown_secs -= 1.0 * delta_time; // decreases by 1 every second
@@ -173,6 +185,11 @@ int entry(int argc, char **argv) {
 					entity_destroy(en);
 				}
 			}
+		}
+
+		// :background world rendering (TBD when we have world data to load)
+		{
+
 		}
 
 		// :entity rendering
@@ -275,6 +292,10 @@ int entry(int argc, char **argv) {
 				Vector2 justified = v2_sub(health_text_pos, v2_divf(health_metrics.functional_size, 2));
 				draw_text(font, health_text, 48, justified, v2(1, 1), COLOR_WHITE);
 			}
+
+			// TODO Add inventory menu
+
+			// TODO Add dialogue box
 		}
 		
 		os_update(); 

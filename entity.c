@@ -114,4 +114,5 @@ Vector2* entity_resolve_hitbox(Entity* en) {
 
 void entity_take_damage(Entity* en, float damage) {
     en->health = clamp(en->health - damage, 0, en->max_health);
+    // todo add knockback
 }
