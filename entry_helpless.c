@@ -1,69 +1,24 @@
 #include "util.c"
-#include "entity.c"
 #include "sprite.c"
+#include "entity.c"
 #include "gjk.c"
-
-void player_setup(Entity* en) {
-	en->arch = ARCH_player;
-	en->renderable = true;
-	en->is_animate = true;
-	en->health = 100;
-}
+#include "weapon.c"
+#include "player.c"
 
 void spider_setup(Entity* en) {
 	en->arch = ARCH_spider;
 	en->renderable = true;
 	en->is_animate = true;
-	en->health = 30;
+	en->is_hostile = true;
+	en->max_health = 30;
+	en->enemy_speed = 5;
+	en->health = en->max_health;
+	en->damage = 10;
 	en->pos = v2(get_random_float32_in_range(-200, 200), get_random_float32_in_range(-200, 200));
 	en->hitbox[0] = v2(0, 0);
 	en->hitbox[1] = v2(0, 7);
 	en->hitbox[2] = v2(20, 0);
 	en->hitbox[3] = v2(20, 7);
-}
-
-void weapon_setup(Entity* en, Entity_Archetype weapon_type) {
-	en->arch = weapon_type;
-	en->renderable = true;
-	en->is_weapon = true;
-	switch (weapon_type) {
-		case ARCH_startersword: {
-			en->weapon_class = WEAPON_melee;
-			en->damage = 10;
-			en->hitbox[0] = v2(0, 0);
-			en->hitbox[1] = v2(0, 13);
-			en->hitbox[2] = v2(13, 0);
-			en->hitbox[3] = v2(13, 13);
-			en->weapon_speed = 3;
-		} break;
-
-		case ARCH_starterbow: {
-			en->weapon_class = WEAPON_ranged;
-			en->damage = 5;
-			en->weapon_speed = 3;
-		} break;
-
-		default: {
-			assert(false, "Invalid weapon type");
-		} break;
-	}
-}
-
-void arrow_setup(Entity* en, Vector2 start_pos, Vector2 fire_dir, float32 base_dmg) {
-	en->arch = ARCH_arrow;
-	en->renderable = true;
-	en->is_projectile = true;
-	en->is_animate = false; // idk why this was on in the first place?
-	en->projectile_range = 200;
-	en->projectile_fire_dir = fire_dir;
-	en->projectile_start_pos = start_pos;
-	en->projectile_speed = 5;
-	en->pos = start_pos;
-	en->damage = base_dmg + 5;
-	en->hitbox[0] = v2(0, 0);
-	en->hitbox[1] = v2(10, 0);
-	en->hitbox[2] = v2(0, 3);
-	en->hitbox[3] = v2(10, 3);
 }
 
 int entry(int argc, char **argv) {
@@ -82,12 +37,16 @@ int entry(int argc, char **argv) {
 	window.fullscreen = false;
 
 	world = alloc(get_heap_allocator(), sizeof(World));
+	memset(world, 0, sizeof(World));
 
 	sprite_load(STR("assets/player.png"), SPRITE_player);
 	sprite_load(STR("assets/spider.png"), SPRITE_spider);
 	sprite_load(STR("assets/startersword.png"), SPRITE_startersword);
 	sprite_load(STR("assets/starterbow.png"), SPRITE_starterbow);
 	sprite_load(STR("assets/arrow.png"), SPRITE_arrow);
+
+	Gfx_Font* font = load_font_from_disk(STR("assets/m3x6.ttf"), get_heap_allocator());
+	assert(font, "Couldn't load font");
 
 	Entity* player = entity_create();
 	player_setup(player);
@@ -104,6 +63,8 @@ int entry(int argc, char **argv) {
 
 	float64 zoom = 5.3;
 	Vector2 camera_pos = v2(0, 0);
+
+	float real_health_width = 0.0;
 
 	float64 last_time = os_get_elapsed_seconds();
 	while (!window.should_close) {
@@ -123,7 +84,7 @@ int entry(int argc, char **argv) {
 			draw_frame.camera_xform = m4_scale(draw_frame.camera_xform, v3(1.0/zoom, 1.0/zoom, 1.0));
 		}		
 
-		if (is_key_just_pressed('F')) {
+		if (is_key_just_pressed(KEY_F11)) {
 			window.fullscreen = !window.fullscreen;
 		}
 
@@ -131,34 +92,11 @@ int entry(int argc, char **argv) {
 			window.should_close = true;
 		}
 
-		Vector2 move_axis = v2(0.0, 0.0);
-		if (is_key_down(KEY_ARROW_UP)) {
-			move_axis.y += 1.0;
-		}
-		if (is_key_down(KEY_ARROW_LEFT)) {
-			move_axis.x -= 1.0;
-		}
-		if (is_key_down(KEY_ARROW_DOWN)) {
-			move_axis.y -= 1.0;
-		}
-		if (is_key_down(KEY_ARROW_RIGHT)) {
-			move_axis.x += 1.0;
-		}
-		move_axis = v2_normalize(move_axis);
-
-		player->pos = v2_add(player->pos, v2_mulf(move_axis, 75 * delta_time));
-		player_weapon->weapon_owner_pos = player->pos;
-		if (move_axis.x != 0 || move_axis.y != 0) {
-			player_weapon->weapon_dir = move_axis;
-		}
-
-		// weapon swapping
-		if (is_key_just_pressed('X')) {
-			swap(player->primary_weapon, player->secondary_weapon, Entity_Archetype);
-			entity_destroy(player_weapon);
-			player_weapon = entity_create();
-			weapon_setup(player_weapon, player->primary_weapon);
-			player_weapon->pos = player->pos;
+		if (player->alive) {
+			player_process_input(player, player_weapon, delta_time);
+		} else {
+			// TODO add game over state
+			player_weapon->alive = false;
 		}
 
 		// :generic simulation (i.e. not a specific boss or player)
@@ -166,9 +104,21 @@ int entry(int argc, char **argv) {
 			if (en->is_animate && en->health <= 0) {
 				en->alive = false;
 			}
+
+			if (en->is_hostile) {
+				en->enemy_cooldown_secs -= 1.0 * delta_time;
+				if (en->enemy_cooldown_secs <= 0) {
+					Vector2* player_hitbox = entity_resolve_hitbox(player);
+					Vector2* hitbox = entity_resolve_hitbox(en);
+					if (gjk(hitbox, 4, player_hitbox, 4)) {
+						entity_take_damage(player, en->damage);
+						en->enemy_cooldown_secs = 4 / en->enemy_speed;
+					}
+				}
+			}
 			
 			// TODO Finish dis
-			// if (en->is_item && is_key_just_pressed('C')) {
+			// if (en->is_item && is_key_just_pressed('E')) {
 			// 	Vector2* player_hitbox = entity_resolve_hitbox(player);
 			// 	Vector2* item_hitbox = entity_resolve_hitbox(en);
 
@@ -179,7 +129,7 @@ int entry(int argc, char **argv) {
 
 			if (en->is_weapon) {
 				en->weapon_cooldown_secs -= 1.0 * delta_time; // decreases by 1 every second
-				if (is_key_just_pressed('Z') && en->weapon_cooldown_secs <= 0) {
+				if (is_key_down(MOUSE_BUTTON_LEFT) && en->weapon_cooldown_secs <= 0) {
 					en->weapon_cooldown_secs = 1 / (en->weapon_speed);
 
 					switch (en->weapon_class) {
@@ -189,7 +139,7 @@ int entry(int argc, char **argv) {
 								Vector2* other_hitbox = entity_resolve_hitbox(other_en);
 
 								if (gjk(hitbox, 4, other_hitbox, 4)) {
-									other_en->health -= en->damage;
+									entity_take_damage(other_en, en->damage);
 								}
 							}
 						} break;
@@ -214,7 +164,7 @@ int entry(int argc, char **argv) {
 						Vector2* other_hitbox = entity_resolve_hitbox(other_en);
 
 						if (other_en->is_animate && gjk(hitbox, 4, other_hitbox, 4)) {
-							other_en->health -= en->damage;
+							entity_take_damage(other_en, en->damage);
 							entity_destroy(en);
 						}
 					}
@@ -228,7 +178,7 @@ int entry(int argc, char **argv) {
 		// :entity rendering
 		for (Entity* en = 0; entity_increment(&en);) {
 			if (en->alive && en->renderable) {
-				Sprite* sprite = sprite_get(sprite_get_id_from_arch(en->arch));
+				Sprite* sprite = sprite_get(entity_sprite_id_from_arch(en->arch));
 				Matrix4 xform = m4_scalar(1.0);
 
 				if (en->is_projectile) {
@@ -260,9 +210,71 @@ int entry(int argc, char **argv) {
 
 		// :ui rendering
 		{
-			// TODO Set projection
-			// TODO Weapon Slots
-			// TODO Health Bar
+			float width = window.width;
+			float height = window.height;
+			draw_frame.camera_xform = m4_scalar(1.0);
+			draw_frame.projection = m4_make_orthographic_projection(0.0, width, 0.0, height, -1, 10);
+
+			float weapon_slot_size = 16.0 * zoom;
+			float weapon_slot_padding = 2.0 * zoom;
+
+			// Primary Weapon Slot
+			{
+				Matrix4 xform = m4_scalar(1.0);
+				xform = m4_translate(xform, v3(weapon_slot_padding, height - weapon_slot_size - weapon_slot_padding, 0.0));
+				draw_rect_xform(xform, v2(weapon_slot_size, weapon_slot_size), hex_to_rgba(0x639bffff));
+
+				Sprite* primary_weapon = sprite_get(entity_sprite_id_from_arch(player->primary_weapon));
+				xform = m4_translate(xform, v3((weapon_slot_size - primary_weapon->size.x * zoom) / 2, (weapon_slot_size - primary_weapon->size.y * zoom) / 2, 0.0));
+				xform = m4_scale(xform, v3(zoom, zoom, zoom));
+				draw_image_xform(primary_weapon->image, xform, primary_weapon->size, COLOR_WHITE);
+			}
+			
+
+			// Secondary Weapon Slot
+			{
+				Matrix4 xform = m4_scalar(1.0);
+				xform = m4_translate(xform, v3(weapon_slot_padding, height - 2*weapon_slot_size - 2*weapon_slot_padding, 0.0));
+				draw_rect_xform(xform, v2(weapon_slot_size, weapon_slot_size), hex_to_rgba(0x3f3f74ff));
+
+				Sprite* secondary_weapon = sprite_get(entity_sprite_id_from_arch(player->secondary_weapon));
+				xform = m4_translate(xform, v3((weapon_slot_size - secondary_weapon->size.x*zoom) / 2, (weapon_slot_size - secondary_weapon->size.y*zoom) / 2, 0.0));
+				xform = m4_scale(xform, v3(zoom, zoom, zoom));
+				draw_image_xform(secondary_weapon->image, xform, secondary_weapon->size, COLOR_WHITE);
+			}
+
+			float health_bar_width = (player->max_health / 2) * zoom;
+			float health_bar_height = 8.0 * zoom;
+			float health_bar_padding = 4.0 * zoom;
+			Vector2 health_bar_pos = v2(weapon_slot_size + health_bar_padding, height - health_bar_height - weapon_slot_padding);
+
+			// Health Bar
+			{
+				Matrix4 xform = m4_scalar(1.0);
+				xform = m4_translate(xform, v3(health_bar_pos.x, health_bar_pos.y, 0.0));
+				draw_rect_xform(xform, v2(health_bar_width, health_bar_height), hex_to_rgba(0x7b343aff));
+
+				float target_width = (player->health / 2) * zoom;
+				animate_to_target_f32(&real_health_width, target_width, delta_time, 20.0);
+				draw_rect_xform(xform, v2(real_health_width, health_bar_height), hex_to_rgba(0xd95763ff));
+			}
+			
+			// Health Text
+			{
+				string health_text;
+				if (player->health >= player->max_health) {
+					health_text = STR("full");
+				} else if (player->health <= 0) {
+					health_text = STR("dead");
+				} else {
+					health_text = tprint("%d", (int)player->health);
+				}
+				Gfx_Text_Metrics health_metrics = measure_text(font, health_text, 48, v2(1, 1));
+				
+				Vector2 health_text_pos = v2(health_bar_pos.x + health_bar_width/2, health_bar_pos.y + health_bar_height/2);
+				Vector2 justified = v2_sub(health_text_pos, v2_divf(health_metrics.functional_size, 2));
+				draw_text(font, health_text, 48, justified, v2(1, 1), COLOR_WHITE);
+			}
 		}
 		
 		os_update(); 

@@ -21,8 +21,10 @@ typedef struct Entity {
 	bool renderable;
 	Entity_Archetype arch;
 	Vector2 pos;
-    bool is_animate;
-	float32 health, damage;
+    bool is_animate, is_hostile;
+    float32 enemy_cooldown_secs;
+    float32 enemy_speed;
+	float32 max_health, health, damage;
     Vector2 hitbox[4];
     Entity_Archetype primary_weapon;
     Entity_Archetype secondary_weapon;
@@ -87,11 +89,29 @@ bool entity_increment(Entity **entity_ptr)
   return !!entity;
 }
 
+Sprite_ID entity_sprite_id_from_arch(Entity_Archetype arch) {
+	switch (arch) {
+		case ARCH_player: return SPRITE_player; break;
+        case ARCH_spider: return SPRITE_spider ; break;
+        case ARCH_mutant: return SPRITE_mutant ; break;
+        case ARCH_tree: return SPRITE_tree ; break;
+        case ARCH_startersword: return SPRITE_startersword ; break;
+        case ARCH_starterbow: return SPRITE_starterbow ; break;
+        case ARCH_arrow: return SPRITE_arrow ; break;
+        default: return 0;
+	}
+}
+
 Vector2* entity_resolve_hitbox(Entity* en) {
     Vector2* hitbox = alloc(get_temporary_allocator(), sizeof(Vector2) * 4);
-    hitbox[0] = v2_add(en->hitbox[0], en->pos);
-	hitbox[1] = v2_add(en->hitbox[1], en->pos);
-	hitbox[2] = v2_add(en->hitbox[2], en->pos);
-	hitbox[3] = v2_add(en->hitbox[3], en->pos);
+    Sprite* sprite = sprite_get(entity_sprite_id_from_arch(en->arch));
+    hitbox[0] = v2_add(en->hitbox[0], v2_add(en->pos, v2(sprite->size.x * -0.5, 0)));
+    hitbox[1] = v2_add(en->hitbox[1], v2_add(en->pos, v2(sprite->size.x * -0.5, 0)));
+    hitbox[2] = v2_add(en->hitbox[2], v2_add(en->pos, v2(sprite->size.x * -0.5, 0)));
+    hitbox[3] = v2_add(en->hitbox[3], v2_add(en->pos, v2(sprite->size.x * -0.5, 0)));
     return hitbox;
+}
+
+void entity_take_damage(Entity* en, float damage) {
+    en->health = clamp(en->health - damage, 0, en->max_health);
 }
